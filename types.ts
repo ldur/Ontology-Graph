@@ -5,6 +5,8 @@ export interface OntologyNode {
   description?: string;
   x?: number;
   y?: number;
+  vx?: number;
+  vy?: number;
   fx?: number | null;
   fy?: number | null;
 }

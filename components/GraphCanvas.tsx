@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import * as d3 from 'd3';
 import { OntologyGraph, OntologyNode, OntologyEdge } from '../types';
 
@@ -8,18 +8,53 @@ interface GraphCanvasProps {
   onEdgeSelect: (edge: OntologyEdge | null) => void;
 }
 
-const GraphCanvas: React.FC<GraphCanvasProps> = ({ graph, onNodeSelect, onEdgeSelect }) => {
+export interface GraphCanvasRef {
+  getGraph: () => OntologyGraph;
+}
+
+const GraphCanvas = forwardRef<GraphCanvasRef, GraphCanvasProps>(({ graph, onNodeSelect, onEdgeSelect }, ref) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   // Keep track of simulation to stop it on unmount
   const simulationRef = useRef<d3.Simulation<OntologyNode, OntologyEdge> | null>(null);
 
   // We need to keep a stable reference to the data to avoid d3 recreating everything on every render
-  // unless the actual data structure changed (length check is a naive but effective heuristic for this demo)
+  // unless the actual data structure changed
   const [activeGraph, setActiveGraph] = useState<OntologyGraph>(graph);
 
+  useImperativeHandle(ref, () => ({
+    getGraph: () => {
+      // Return the current state from the simulation nodes if available, otherwise activeGraph
+      if (simulationRef.current) {
+        return {
+          nodes: simulationRef.current.nodes(),
+          edges: activeGraph.edges // Edges are maintained in activeGraph state
+        } as OntologyGraph;
+      }
+      return activeGraph;
+    }
+  }));
+
   useEffect(() => {
-    setActiveGraph(JSON.parse(JSON.stringify(graph)));
+    // Create deep copy of new prop
+    const newGraphData = JSON.parse(JSON.stringify(graph));
+
+    // If we have an existing simulation, copy over positions to avoid layout reset
+    if (simulationRef.current) {
+       const currentNodesMap = new Map(simulationRef.current.nodes().map(n => [n.id, n]));
+       newGraphData.nodes.forEach((n: OntologyNode) => {
+         const existing = currentNodesMap.get(n.id);
+         if (existing) {
+           n.x = existing.x;
+           n.y = existing.y;
+           // Also preserve velocity for smoothness if we wanted, but x/y is enough for position
+           if (existing.vx !== undefined) n.vx = existing.vx;
+           if (existing.vy !== undefined) n.vy = existing.vy;
+         }
+       });
+    }
+
+    setActiveGraph(newGraphData);
   }, [graph]);
 
   useEffect(() => {
@@ -193,6 +228,6 @@ const GraphCanvas: React.FC<GraphCanvasProps> = ({ graph, onNodeSelect, onEdgeSe
       </div>
     </div>
   );
-};
+});
 
 export default GraphCanvas;

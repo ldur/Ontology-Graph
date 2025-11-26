@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import GraphCanvas from './components/GraphCanvas';
+import React, { useState, useEffect, useRef } from 'react';
+import GraphCanvas, { GraphCanvasRef } from './components/GraphCanvas';
 import Sidebar from './components/Sidebar';
 import { OntologyGraph, OntologyNode, OntologyEdge, SavedOntology } from './types';
 import { generateOntology } from './services/geminiService';
@@ -14,6 +14,8 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [savedOntologies, setSavedOntologies] = useState<SavedOntology[]>([]);
   const [showSaves, setShowSaves] = useState(false);
+  
+  const graphRef = useRef<GraphCanvasRef>(null);
 
   // Load saves on mount
   useEffect(() => {
@@ -103,10 +105,19 @@ function App() {
     const name = prompt("Enter a name for this ontology:", `Ontology ${new Date().toLocaleDateString()}`);
     if (!name) return;
 
-    // We need to clean the graph data before saving because D3 attaches circular references (x, y, vx, vy, source object, target object)
-    // We want to save the pure structure.
-    const cleanNodes = graph.nodes.map(({ id, label, type, description }) => ({ id, label, type, description }));
-    const cleanEdges = graph.edges.map(e => ({
+    // Get current graph state from canvas to ensure we capture latest positions (x, y)
+    const currentGraph = graphRef.current ? graphRef.current.getGraph() : graph;
+
+    // Clean nodes: Keep only necessary data + positions
+    const cleanNodes = currentGraph.nodes.map(({ id, label, type, description, x, y }) => {
+      const node: OntologyNode = { id, label, type, description };
+      if (typeof x === 'number') node.x = x;
+      if (typeof y === 'number') node.y = y;
+      return node;
+    });
+
+    // Clean edges: Ensure source/target are string IDs (D3 converts them to objects)
+    const cleanEdges = currentGraph.edges.map(e => ({
       id: e.id,
       source: typeof e.source === 'object' ? (e.source as any).id : e.source,
       target: typeof e.target === 'object' ? (e.target as any).id : e.target,
@@ -163,6 +174,7 @@ function App() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleClear = () => {
@@ -279,6 +291,7 @@ function App() {
         {/* D3 Canvas */}
         <div className="flex-1 bg-slate-50 overflow-hidden">
            <GraphCanvas 
+             ref={graphRef}
              graph={graph} 
              onNodeSelect={setSelectedNode} 
              onEdgeSelect={setSelectedEdge}
