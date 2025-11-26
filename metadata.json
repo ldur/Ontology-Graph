@@ -1,0 +1,5 @@
+{
+  "name": "Ontology Graph",
+  "description": "An interactive AI-powered ontology editor and visualizer. Generate knowledge graphs with Gemini, edit nodes and relations, and export to Markdown.",
+  "requestFramePermissions": []
+}
